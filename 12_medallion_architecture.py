@@ -9,8 +9,39 @@ from databricks.sdk.service.catalog import SchemaInfo
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, current_timestamp, when, regexp_replace, trim, upper, to_date, year, month, dayofmonth
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, TimestampType, DateType
+import logging
 
-workspace = WorkspaceClient()
+# Import utilities
+try:
+    from config import workspace, get_config, validate_catalog_name, format_table_path, get_checkpoint_path, log_operation
+    from config import logger as config_logger
+except ImportError:
+    # Fallback if config module not available
+    workspace = WorkspaceClient()
+    logging.basicConfig(level=logging.INFO)
+    config_logger = logging.getLogger(__name__)
+    
+    def get_config():
+        return {
+            "catalog": "main",
+            "bronze_schema": "bronze",
+            "silver_schema": "silver",
+            "gold_schema": "gold"
+        }
+    
+    def validate_catalog_name(name):
+        return True
+    
+    def format_table_path(catalog, schema, table):
+        return f"{catalog}.{schema}.{table}"
+    
+    def get_checkpoint_path(catalog, schema, table):
+        return f"/checkpoints/{catalog}/{schema}/{table}"
+    
+    def log_operation(operation, details=None):
+        config_logger.info(f"Operation: {operation}")
+
+logger = logging.getLogger(__name__)
 
 # Initialize Spark (in Databricks, this is already available as 'spark')
 # For local: spark = SparkSession.builder.appName("MedallionArchitecture").getOrCreate()
@@ -20,14 +51,23 @@ def setup_medallion_catalog(catalog_name: str):
     Creates a catalog for the medallion architecture.
     This will contain bronze, silver, and gold schemas.
     """
+    log_operation("setup_medallion_catalog", {"catalog_name": catalog_name})
+    
+    # Validate catalog name
+    if not validate_catalog_name(catalog_name):
+        logger.error(f"Invalid catalog name: {catalog_name}")
+        return None
+    
     try:
         catalog = workspace.catalogs.create(
             name=catalog_name,
             comment=f"Medallion architecture catalog: {catalog_name}"
         )
+        logger.info(f"✓ Created catalog: {catalog_name}")
         print(f"✓ Created catalog: {catalog_name}")
         return catalog
     except Exception as e:
+        logger.warning(f"Catalog {catalog_name} may already exist: {str(e)}")
         print(f"Catalog {catalog_name} may already exist: {str(e)}")
         return None
 
