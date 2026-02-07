@@ -315,3 +315,148 @@ def restore_table_to_version(table_name: str, version: int):
     except Exception as e:
         print(f"✗ Error restoring table: {str(e)}")
         return None
+
+def monitor_table_health(table_name: str):
+    """
+    Monitors the health of a Delta table.
+    Checks file sizes, number of files, and optimization status.
+    """
+    print(f"=== Monitoring Table Health: {table_name} ===")
+    
+    # Get file statistics
+    detail_df, file_stats = get_table_file_stats(table_name)
+    
+    if file_stats:
+        stats_row = file_stats.collect()[0]
+        file_count = stats_row['file_count']
+        avg_size = stats_row['avg_file_size_bytes']
+        
+        print(f"\n📊 Health Metrics:")
+        print(f"  Total files: {file_count}")
+        print(f"  Average file size: {avg_size / (1024*1024):.2f} MB")
+        
+        # Recommendations
+        print(f"\n💡 Recommendations:")
+        if file_count > 1000:
+            print(f"  ⚠️  High file count ({file_count}) - consider running OPTIMIZE")
+        
+        if avg_size < 128 * 1024 * 1024:  # Less than 128MB
+            print(f"  ⚠️  Small average file size ({avg_size / (1024*1024):.2f} MB) - consider compaction")
+        
+        if avg_size > 512 * 1024 * 1024:  # More than 512MB
+            print(f"  ⚠️  Large average file size ({avg_size / (1024*1024):.2f} MB) - may impact query performance")
+    
+    return detail_df, file_stats
+
+def optimize_table_schedule(table_name: str, zorder_columns: list = None):
+    """
+    Creates an optimization schedule for a table.
+    Returns SQL commands that can be scheduled in Databricks workflows.
+    
+    Args:
+        table_name: Full table name
+        zorder_columns: Optional columns for Z-ORDER
+    
+    Returns:
+        Dictionary with SQL commands for scheduling
+    """
+    print(f"=== Creating Optimization Schedule for: {table_name} ===")
+    
+    schedule = {
+        "daily_optimize": f"OPTIMIZE {table_name}" + (f" ZORDER BY ({', '.join(zorder_columns)})" if zorder_columns else ""),
+        "weekly_vacuum": f"VACUUM {table_name} RETAIN 168 HOURS",
+        "daily_analyze": f"ANALYZE TABLE {table_name} COMPUTE STATISTICS FOR ALL COLUMNS"
+    }
+    
+    print(f"\n📅 Recommended Schedule:")
+    print(f"\n  Daily (OPTIMIZE):")
+    print(f"    {schedule['daily_optimize']}")
+    print(f"\n  Weekly (VACUUM):")
+    print(f"    {schedule['weekly_vacuum']}")
+    print(f"\n  Daily (ANALYZE):")
+    print(f"    {schedule['daily_analyze']}")
+    
+    return schedule
+
+def best_practices_summary():
+    """
+    Prints a summary of Delta Lake optimization best practices.
+    """
+    print("=" * 70)
+    print("Delta Lake Optimization - Best Practices Summary")
+    print("=" * 70)
+    
+    practices = [
+        {
+            "Practice": "Enable Auto-Optimize",
+            "When": "For frequently written tables",
+            "Benefit": "Automatic file compaction during writes"
+        },
+        {
+            "Practice": "Use Z-ORDER",
+            "When": "For columns frequently used in WHERE clauses",
+            "Benefit": "Co-locates related data, faster queries"
+        },
+        {
+            "Practice": "Bloom Filters",
+            "When": "High-cardinality columns in filters",
+            "Benefit": "Faster point lookups and joins"
+        },
+        {
+            "Practice": "Regular OPTIMIZE",
+            "When": "Daily or after large writes",
+            "Benefit": "Compacts small files, improves read performance"
+        },
+        {
+            "Practice": "VACUUM old files",
+            "When": "Weekly, after 7+ days retention",
+            "Benefit": "Reduces storage costs, faster metadata operations"
+        },
+        {
+            "Practice": "ANALYZE TABLE",
+            "When": "After schema changes or large data loads",
+            "Benefit": "Better query planning with updated statistics"
+        },
+        {
+            "Practice": "Partition large tables",
+            "When": "Tables > 1TB or frequently filtered by date/region",
+            "Benefit": "Faster queries through partition pruning"
+        },
+        {
+            "Practice": "Monitor file sizes",
+            "When": "Regularly check table health",
+            "Benefit": "Identify optimization opportunities early"
+        }
+    ]
+    
+    print("\n📋 Best Practices:\n")
+    for i, practice in enumerate(practices, 1):
+        print(f"{i}. {practice['Practice']}")
+        print(f"   When: {practice['When']}")
+        print(f"   Benefit: {practice['Benefit']}\n")
+    
+    print("=" * 70)
+
+# Example usage
+if __name__ == "__main__":
+    print("=== Delta Lake Optimization Practice ===\n")
+    
+    # Example table
+    example_table = "my_catalog.my_schema.customers"
+    
+    print("Key Optimization Techniques:")
+    print("1. OPTIMIZE - Compact small files and apply Z-ORDER")
+    print("2. VACUUM - Remove old files beyond retention")
+    print("3. ANALYZE - Compute statistics for query optimization")
+    print("4. Auto-Optimize - Automatic compaction during writes")
+    print("5. Bloom Filters - Fast point lookups")
+    print("6. Z-ORDER - Co-locate related data")
+    print("\nExample Usage:")
+    print(f"- Optimize table: optimize_delta_table('{example_table}', ['customer_id', 'date'])")
+    print(f"- Enable auto-optimize: enable_auto_optimize('{example_table}')")
+    print(f"- Monitor health: monitor_table_health('{example_table}')")
+    print(f"- Get optimization schedule: optimize_table_schedule('{example_table}', ['customer_id'])")
+    
+    print("\n" + "=" * 70)
+    best_practices_summary()
+    print("\n=== Practice Complete ===")
