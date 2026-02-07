@@ -149,3 +149,169 @@ def set_table_properties(table_name: str, properties: dict):
             print(f"  ✗ Error setting property: {str(e)}")
     
     print(f"\n✓ All properties configured")
+
+def enable_auto_optimize(table_name: str, optimize_write: bool = True, auto_compact: bool = True):
+    """
+    Enables auto-optimization for a Delta table.
+    Auto-optimization automatically compacts small files during writes.
+    
+    Args:
+        table_name: Full table name
+        optimize_write: Enable automatic file optimization during writes
+        auto_compact: Enable automatic compaction of small files
+    """
+    print(f"=== Enabling Auto-Optimize for: {table_name} ===")
+    
+    properties = {
+        'delta.autoOptimize.optimizeWrite': str(optimize_write).lower(),
+        'delta.autoOptimize.autoCompact': str(auto_compact).lower()
+    }
+    
+    set_table_properties(table_name, properties)
+    print(f"\n✓ Auto-optimization enabled:")
+    print(f"  - Optimize Write: {optimize_write}")
+    print(f"  - Auto Compact: {auto_compact}")
+
+def create_bloom_filter_index(table_name: str, column: str):
+    """
+    Creates a Bloom filter index on a column for faster point lookups.
+    Bloom filters are useful for high-cardinality columns used in WHERE clauses.
+    
+    Args:
+        table_name: Full table name
+        column: Column name to create Bloom filter on
+    """
+    print(f"=== Creating Bloom Filter Index ===")
+    print(f"  Table: {table_name}")
+    print(f"  Column: {column}")
+    
+    # Note: Bloom filter creation syntax may vary by Databricks version
+    # This is a conceptual example
+    bloom_sql = f"""
+    CREATE BLOOM FILTER INDEX
+    ON TABLE {table_name}
+    FOR COLUMNS({column})
+    """
+    
+    print(f"\nSQL Command:")
+    print(f"  {bloom_sql}")
+    print(f"\n⚠️  Note: Bloom filters are available in Databricks Runtime 10.4+")
+    
+    try:
+        result = spark.sql(bloom_sql)
+        print(f"\n✓ Bloom filter index created on {column}")
+        return result
+    except Exception as e:
+        print(f"✗ Error creating Bloom filter: {str(e)}")
+        print(f"  This feature may not be available in your Databricks version")
+        return None
+
+def optimize_for_queries(table_name: str, filter_columns: list, zorder_columns: list = None):
+    """
+    Optimizes a table specifically for query performance.
+    Combines Z-ORDER with Bloom filters for optimal query speed.
+    
+    Args:
+        table_name: Full table name
+        filter_columns: Columns frequently used in WHERE clauses (for Bloom filters)
+        zorder_columns: Columns for Z-ORDER clustering (optional)
+    """
+    print(f"=== Optimizing Table for Query Performance ===")
+    print(f"  Table: {table_name}")
+    print(f"  Filter columns: {', '.join(filter_columns)}")
+    
+    # Step 1: Create Bloom filters on filter columns
+    for col_name in filter_columns:
+        create_bloom_filter_index(table_name, col_name)
+    
+    # Step 2: Apply Z-ORDER if specified
+    if zorder_columns:
+        print(f"\n  Applying Z-ORDER on: {', '.join(zorder_columns)}")
+        optimize_delta_table(table_name, zorder_columns)
+    else:
+        optimize_delta_table(table_name)
+    
+    # Step 3: Analyze table for statistics
+    analyze_delta_table(table_name)
+    
+    print(f"\n✓ Table optimized for query performance")
+
+def compact_small_files(table_name: str, target_file_size: str = "128MB"):
+    """
+    Compacts small files in a Delta table to improve read performance.
+    
+    Args:
+        table_name: Full table name
+        target_file_size: Target size for compacted files (e.g., "128MB", "256MB")
+    """
+    print(f"=== Compacting Small Files ===")
+    print(f"  Table: {table_name}")
+    print(f"  Target file size: {target_file_size}")
+    
+    # OPTIMIZE automatically compacts small files
+    optimize_sql = f"OPTIMIZE {table_name}"
+    
+    print(f"\nSQL Command:")
+    print(f"  {optimize_sql}")
+    print(f"\n  Note: OPTIMIZE automatically compacts files to optimal size")
+    
+    try:
+        result = spark.sql(optimize_sql)
+        result.show(truncate=False)
+        print(f"\n✓ Files compacted")
+        return result
+    except Exception as e:
+        print(f"✗ Error compacting files: {str(e)}")
+        return None
+
+def get_table_history(table_name: str, limit: int = 20):
+    """
+    Gets the transaction history of a Delta table.
+    Useful for auditing and understanding table changes.
+    
+    Args:
+        table_name: Full table name
+        limit: Number of recent operations to show
+    """
+    print(f"=== Table History for: {table_name} ===")
+    
+    history_sql = f"DESCRIBE HISTORY {table_name} LIMIT {limit}"
+    
+    print(f"\nSQL Command:")
+    print(f"  {history_sql}")
+    
+    try:
+        history_df = spark.sql(history_sql)
+        history_df.show(truncate=False)
+        print(f"\n✓ History retrieved ({limit} most recent operations)")
+        return history_df
+    except Exception as e:
+        print(f"✗ Error getting history: {str(e)}")
+        return None
+
+def restore_table_to_version(table_name: str, version: int):
+    """
+    Restores a Delta table to a specific version.
+    Useful for rolling back changes.
+    
+    Args:
+        table_name: Full table name
+        version: Version number to restore to
+    """
+    print(f"=== Restoring Table to Version ===")
+    print(f"  Table: {table_name}")
+    print(f"  Version: {version}")
+    
+    restore_sql = f"RESTORE TABLE {table_name} TO VERSION AS OF {version}"
+    
+    print(f"\nSQL Command:")
+    print(f"  {restore_sql}")
+    print(f"\n⚠️  Warning: This will restore the table to a previous state")
+    
+    try:
+        result = spark.sql(restore_sql)
+        print(f"\n✓ Table restored to version {version}")
+        return result
+    except Exception as e:
+        print(f"✗ Error restoring table: {str(e)}")
+        return None
