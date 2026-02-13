@@ -51,6 +51,13 @@ databricks configure --token
 
 Each script can be run independently to practice specific Unity Catalog features. Start with catalog management and work through each module sequentially.
 
+### Additional Modules
+
+- `11_autoloader.py` - Databricks Auto Loader patterns and best practices
+- `12_medallion_architecture.py` - Bronze/Silver/Gold medallion design
+- `13_data_quality.py` - Reusable data quality checks and scoring
+- `14_delta_lake_optimization.py` - Delta Lake performance and maintenance
+
 ## Notes
 
 - These are practice scripts - adjust catalog/schema names for your environment
